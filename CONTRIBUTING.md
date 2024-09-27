@@ -9,7 +9,7 @@ Thank you for your interest in contributing to `splice-site-strength-quantificat
 2. **Clone your fork**: Clone your forked repository to your local development environment.
 
     ```bash
-    git clone https://github.com/splice-site-strength-quantification/splice-site-strength-quantification.git
+    git clone https://github.com/hackbio-ca/splice-site-strength-quantification.git
     ```
 
 3. **Create a new branch**: Create a new branch for your changes. Use a descriptive branch name that indicates the work you are doing.
