@@ -1,0 +1,28 @@
+
+```{python}
+import pickle
+```
+
+```{python}
+with open("proc/training_dataset.pkl", "rb") as f:
+    training_dataset = pickle.load(f)
+
+with open("proc/test_dataset.pkl", "rb") as f:
+    test_dataset = pickle.load(f)
+```
+
+Split the transcripts into 80-nt chunks.
+
+```{python}
+training_dataset_80nt = [[i[0][:80], i[1].reshape(-1)[:80]] for i in training_dataset]
+
+test_dataset_80nt = [[i[0][:80], i[1].reshape(-1)[:80]] for i in test_dataset]
+```
+
+```{python}
+with open("proc/training_dataset_80nt.pkl", "wb") as f:
+    pickle.dump(training_dataset_80nt, f)
+
+with open("proc/test_dataset_80nt.pkl", "wb") as f:
+    pickle.dump(test_dataset_80nt, f)
+```

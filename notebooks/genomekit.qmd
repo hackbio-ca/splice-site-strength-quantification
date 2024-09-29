@@ -1,0 +1,145 @@
+# Preparation
+
+## Import the necessary libraries
+
+```{python}
+import genome_kit as gk
+import pickle
+from genome_kit import GenomeTrackBuilder, GenomeTrack
+import spliceai
+from keras.models import load_model
+from pkg_resources import resource_filename
+from spliceai.utils import one_hot_encode
+import numpy as np
+import polars as pl
+from genome_kit import Genome
+from genome_kit import Interval
+```
+
+## Define functions
+
+```{python}
+def read_gtf(file, attributes=["transcript_id"]):
+    return pl.read_csv(file, separator="\t", comment_prefix="#", new_columns=["seqname","source","feature","start","end","score","strand","frame","attributes"])\
+        .with_columns(
+            [pl.col("attributes").str.extract(rf'{attribute} "([^;]*)";').alias(attribute) for attribute in attributes]
+            ).drop("attributes")
+```
+
+```{python}
+def is_protein_coding(t): return t.type == "protein_coding"
+```
+
+## Load genome
+
+```{python}
+genome = Genome("gencode.v39")
+```
+
+# Start here
+
+## Getting nucleotide sequences
+
+Keep only the multi-exonic and protein-coding transcripts
+
+```{python}
+protein_coding_transcripts = list(filter(is_protein_coding, genome.transcripts))
+```
+
+```{python}
+tmp = list(protein_coding_transcripts)
+sequences = [genome.dna(t) for t in tmp]
+```
+
+## Getting the labels
+
+```{python}
+donor_list = []
+for t_i in range(len(protein_coding_transcripts)):
+    if protein_coding_transcripts[t_i].strand == "+":
+        donor_list.extend([protein_coding_transcripts[t_i].exons[e_i].end3 for e_i in range(len(protein_coding_transcripts[t_i].exons))])
+    if protein_coding_transcripts[t_i].strand == "-":
+        donor_list.extend([protein_coding_transcripts[t_i].exons[e_i].end5 for e_i in range(len(protein_coding_transcripts[t_i].exons))])
+donor_list = list(set([intv.expand(0, 1) for intv in donor_list]))        
+```
+
+```{python}
+acceptor_list = []
+for t_i in range(len(protein_coding_transcripts)):
+    if protein_coding_transcripts[t_i].strand == "+":
+        acceptor_list.extend([protein_coding_transcripts[t_i].exons[e_i].end5 for e_i in range(len(protein_coding_transcripts[t_i].exons))])
+    if protein_coding_transcripts[t_i].strand == "-":
+        acceptor_list.extend([protein_coding_transcripts[t_i].exons[e_i].end3 for e_i in range(len(protein_coding_transcripts[t_i].exons))])
+acceptor_list = list(set([intv.expand(0, 1) for intv in acceptor_list]))        
+```
+
+```{python}
+acceptor_list = np.setdiff1d(acceptor_list, np.intersect1d(donor_list, acceptor_list))
+donor_list = np.setdiff1d(donor_list, np.intersect1d(donor_list, acceptor_list))
+```
+
+```{python}
+track = GenomeTrackBuilder("foo.gtrack", "f16", "strand_unaware", genome)
+
+track.set_default_value(0)
+
+for donor in donor_list:
+    track.set_data(donor, np.array([1.0], dtype=np.float16))
+
+for acceptor in acceptor_list:
+    track.set_data(acceptor, np.array([2.0], dtype=np.float16))    
+track.finalize()
+```
+
+```{python}
+track = GenomeTrack("foo.gtrack")
+```
+
+```{python}
+out = [[protein_coding_transcripts[i].id, genome.dna(protein_coding_transcripts[i]), track(protein_coding_transcripts[i].interval)] for i in range(len(protein_coding_transcripts))]
+```
+
+# Getting the training dataset and test dataset
+
+Remove ChrM, ChrX and ChrY.
+
+```{python}
+protein_coding_transcripts = [protein_coding_transcripts[i] for i in range(len(protein_coding_transcripts)) if protein_coding_transcripts[i].chromosome not in ["chrM", "chrX", "chrY"]]
+```
+
+Getting training dataset
+
+```{python}
+chr_list = list(set([protein_coding_transcripts[i].chromosome for i in range(len(protein_coding_transcripts))]))
+```
+
+```{python}
+training_chr = chr_list[:17]
+test_chr = chr_list[-4:]
+```
+
+```{python}
+training_dataset = [[genome.dna(protein_coding_transcripts[i]), track(protein_coding_transcripts[i].interval)] for i in range(len(protein_coding_transcripts)) if protein_coding_transcripts[i].chromosome in training_chr]
+```
+
+
+```{python}
+test_dataset = [[genome.dna(protein_coding_transcripts[i]), track(protein_coding_transcripts[i].interval)] for i in range(len(protein_coding_transcripts)) if protein_coding_transcripts[i].chromosome in test_chr]
+```
+
+
+```{python}
+with open("proc/training_dataset.pkl", "wb") as f:
+    pickle.dump(training_dataset, f)
+
+with open("proc/test_dataset.pkl", "wb") as f:
+    pickle.dump(test_dataset, f)
+```
+
+
+```{python}
+with open("proc/training_subset.pkl", "wb") as f:
+    pickle.dump(training_dataset[:1000], f)
+with open("proc/test_subset.pkl", "wb") as f:
+    pickle.dump(test_dataset[:1000], f)
+```
