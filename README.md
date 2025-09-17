@@ -2,6 +2,8 @@
 
 Develop a method to quantify splice site strength across vertebrate species using computational models to analyze splice site sequences and predict splicing outcomes.
 
+** Toronto Bioinformatics Hackathon, 2024**
+
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Abstract
